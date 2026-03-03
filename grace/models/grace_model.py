@@ -69,13 +69,18 @@ class GRACEModel(nn.Module):
         fused = self.bcma(visual, kw)
 
         ys = torch.full((bsz, 1), bos_id, dtype=torch.long, device=images.device)
+        finished = torch.zeros(bsz, dtype=torch.bool, device=images.device)
         for _ in range(max_len - 1):
             cmask = self.causal_mask(ys.shape[1], ys.device)
             logits = self.decoder(ys, fused, cmask)
             next_tok = logits[:, -1].argmax(dim=-1, keepdim=True)
+            next_tok = torch.where(
+                finished.unsqueeze(1),
+                torch.full_like(next_tok, eos_id),
+                next_tok,
+            )
+            finished = finished | (next_tok.squeeze(1) == eos_id)
             ys = torch.cat([ys, next_tok], dim=1)
-            if (next_tok.squeeze(1) == eos_id).all():
-                break
         return ys
 
     def mc_dropout_generate(
