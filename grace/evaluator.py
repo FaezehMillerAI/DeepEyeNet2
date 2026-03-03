@@ -5,6 +5,7 @@ from typing import Dict, List, Sequence, Set
 import numpy as np
 import torch
 from torch.utils.data import DataLoader
+from tqdm import tqdm
 
 from .metrics import compute_all_metrics
 
@@ -17,6 +18,7 @@ def run_inference(
     device: torch.device,
     max_gen_len: int,
     mc_passes: int,
+    stage_name: str = "Inference",
 ):
     refs, hyps = [], []
     token_conf_all = []
@@ -25,7 +27,8 @@ def run_inference(
 
     raw_rows = []
 
-    for batch in loader:
+    pbar = tqdm(loader, desc=stage_name, total=len(loader), leave=False)
+    for batch in pbar:
         images = batch["image"].to(device)
         keyword_ids = batch["keyword_ids"].to(device)
         gt_ids = batch["report_ids"].to(device)
@@ -63,6 +66,7 @@ def run_inference(
         token_conf_all.append(conf.reshape(-1))
         token_correct_all.append(corr.reshape(-1))
         token_entropy_all.append(token_entropy.cpu().numpy().reshape(-1))
+        pbar.set_postfix(samples=len(refs))
 
     return {
         "refs": refs,
