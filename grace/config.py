@@ -37,7 +37,7 @@ class TrainConfig:
     seed: int = 42
     device: str = "cuda"
     batch_size: int = 8
-    epochs: int = 20
+    epochs: int = 7
     lr: float = 3e-4
     weight_decay: float = 1e-4
     grad_clip: float = 1.0
