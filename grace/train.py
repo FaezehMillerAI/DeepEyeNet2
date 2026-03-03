@@ -192,6 +192,7 @@ def train_grace(cfg: GRACEConfig) -> Dict:
             pbar.set_postfix(loss=f"{parts['total']:.4f}")
 
         avg_train = float(sum(running) / max(1, len(running)))
+        tqdm.write(f"[Epoch {epoch}] Training complete. Running validation inference...")
 
         val_out = run_inference(
             model=model,
@@ -200,7 +201,9 @@ def train_grace(cfg: GRACEConfig) -> Dict:
             device=device,
             max_gen_len=cfg.evaluation.max_gen_len,
             mc_passes=cfg.evaluation.mc_dropout_passes,
+            stage_name=f"Validation {epoch}/{cfg.train.epochs}",
         )
+        tqdm.write(f"[Epoch {epoch}] Validation inference complete. Computing validation metrics...")
         val_metrics = evaluate_predictions(
             refs=val_out["refs"],
             hyps=val_out["hyps"],
@@ -241,6 +244,7 @@ def train_grace(cfg: GRACEConfig) -> Dict:
 
     ckpt = torch.load(out_dir / "best_grace.pt", map_location=device)
     model.load_state_dict(ckpt["model_state"])
+    tqdm.write("Best checkpoint loaded. Running final test evaluation...")
 
     test_out = run_inference(
         model=model,
@@ -249,8 +253,10 @@ def train_grace(cfg: GRACEConfig) -> Dict:
         device=device,
         max_gen_len=cfg.evaluation.max_gen_len,
         mc_passes=cfg.evaluation.mc_dropout_passes,
+        stage_name="Test Evaluation",
     )
 
+    tqdm.write("Test inference complete. Computing final metrics...")
     test_metrics = evaluate_predictions(
         refs=test_out["refs"],
         hyps=test_out["hyps"],
@@ -261,6 +267,7 @@ def train_grace(cfg: GRACEConfig) -> Dict:
         bins=cfg.evaluation.calibration_bins,
     )
 
+    tqdm.write("Saving metrics, predictions, and visualization artifacts...")
     save_json(history, out_dir / "training_history.json")
     save_json(test_metrics, out_dir / "test_metrics.json")
     pd.DataFrame(test_out["rows"]).to_csv(out_dir / "test_predictions.csv", index=False)
