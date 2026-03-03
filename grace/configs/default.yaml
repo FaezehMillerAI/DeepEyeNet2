@@ -23,8 +23,8 @@ train:
   seed: 42
   device: cuda
   batch_size: 8
-  epochs: 7
-  lr: 0.0003
+  epochs: 2
+  lr: 0.0005
   weight_decay: 0.0001
   grad_clip: 1.0
   clinical_weight_delta: 3.0
