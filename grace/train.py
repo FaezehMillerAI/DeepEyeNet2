@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import asdict
 from pathlib import Path
 from typing import Dict, List, Set
 
@@ -233,7 +234,8 @@ def train_grace(cfg: GRACEConfig) -> Dict:
                     "model_state": model.state_dict(),
                     "tokenizer_vocab": tokenizer.vocab.itos,
                     "graph_node2id": graph.node2id,
-                    "config": cfg,
+                    # Store plain dict to keep checkpoint compatible with torch.load(weights_only=True).
+                    "config_dict": asdict(cfg),
                 },
                 out_dir / "best_grace.pt",
             )
@@ -242,7 +244,7 @@ def train_grace(cfg: GRACEConfig) -> Dict:
             if patience >= cfg.train.early_stop_patience:
                 break
 
-    ckpt = torch.load(out_dir / "best_grace.pt", map_location=device)
+    ckpt = torch.load(out_dir / "best_grace.pt", map_location=device, weights_only=True)
     model.load_state_dict(ckpt["model_state"])
     tqdm.write("Best checkpoint loaded. Running final test evaluation...")
 
