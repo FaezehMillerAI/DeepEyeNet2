@@ -5,6 +5,7 @@ from typing import Dict, List, Set
 
 import pandas as pd
 import torch
+import pickle
 from torch.utils.data import DataLoader
 from tqdm import tqdm
 
@@ -87,7 +88,14 @@ def evaluate_grace(cfg: GRACEConfig, checkpoint_path: str | Path) -> Dict:
     graph = build_graph_from_dataframe(train_df, relation_types=cfg.model.relation_types)
     test_allowed = _build_allowed_concepts(test_df, graph)
 
-    ckpt = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+    try:
+        ckpt = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+    except pickle.UnpicklingError:
+        # Backward compatibility for older checkpoints that stored dataclass objects.
+        tqdm.write(
+            "Detected legacy checkpoint format. Reloading with weights_only=False for compatibility."
+        )
+        ckpt = torch.load(checkpoint_path, map_location="cpu", weights_only=False)
 
     vocab_itos = ckpt.get("tokenizer_vocab")
     if vocab_itos is None:
