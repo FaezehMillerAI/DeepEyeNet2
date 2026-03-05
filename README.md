@@ -115,6 +115,16 @@ python scripts/train_grace.py \
   --output-dir ./outputs
 ```
 
+Resume interrupted training:
+
+```bash
+# Auto-resume from ./outputs/last_checkpoint.pt
+python scripts/train_grace.py --config grace/configs/default.yaml --dataset-root /path/to/DeepEyeNet --output-dir ./outputs
+
+# Or explicit checkpoint path
+python scripts/train_grace.py --config grace/configs/default.yaml --dataset-root /path/to/DeepEyeNet --output-dir ./outputs --resume-path ./outputs/last_checkpoint.pt
+```
+
 ## 8) Recommended Paper Sections Enabled by This Code
 
 - Architecture diagram and module-wise rationale (GRACE vs M3T)
