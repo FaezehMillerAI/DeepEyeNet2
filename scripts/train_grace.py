@@ -20,6 +20,17 @@ def main():
     parser.add_argument("--valid-csv", type=str, default=None, help="Override data.valid_csv from config")
     parser.add_argument("--test-csv", type=str, default=None, help="Override data.test_csv from config")
     parser.add_argument("--output-dir", type=str, default=None, help="Override output_dir from config")
+    parser.add_argument(
+        "--resume-path",
+        type=str,
+        default=None,
+        help="Path to a checkpoint (.pt) to resume training from",
+    )
+    parser.add_argument(
+        "--no-auto-resume",
+        action="store_true",
+        help="Disable automatic resume from output_dir/last_checkpoint.pt",
+    )
     args = parser.parse_args()
 
     cfg = load_config(args.config)
@@ -37,7 +48,7 @@ def main():
     Path(cfg.output_dir).mkdir(parents=True, exist_ok=True)
     from grace.train import train_grace
 
-    result = train_grace(cfg)
+    result = train_grace(cfg, resume_path=args.resume_path, auto_resume=not args.no_auto_resume)
 
     print("Training finished.")
     print(f"Output dir: {result['output_dir']}")
