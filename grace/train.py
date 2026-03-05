@@ -47,7 +47,7 @@ def _build_allowed_concepts(df: pd.DataFrame, graph_artifacts) -> List[Set[str]]
     return out
 
 
-def train_grace(cfg: GRACEConfig) -> Dict:
+def train_grace(cfg: GRACEConfig, resume_path: str | None = None, auto_resume: bool = True) -> Dict:
     set_seed(cfg.train.seed)
     out_dir = Path(cfg.output_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -147,14 +147,40 @@ def train_grace(cfg: GRACEConfig) -> Dict:
 
     optimizer = AdamW(model.parameters(), lr=cfg.train.lr, weight_decay=cfg.train.weight_decay)
 
+    ckpt_best_path = out_dir / "best_grace.pt"
+    ckpt_last_path = out_dir / "last_checkpoint.pt"
+
     best_bleu4 = -1.0
     patience = 0
     history = []
+    start_epoch = 1
 
     valid_allowed = _build_allowed_concepts(valid_df, graph)
     test_allowed = _build_allowed_concepts(test_df, graph)
 
-    for epoch in range(1, cfg.train.epochs + 1):
+    chosen_resume = None
+    if resume_path:
+        chosen_resume = Path(resume_path)
+    elif auto_resume and ckpt_last_path.exists():
+        chosen_resume = ckpt_last_path
+
+    if chosen_resume is not None and chosen_resume.exists():
+        tqdm.write(f"Resuming from checkpoint: {chosen_resume}")
+        resume_ckpt = torch.load(chosen_resume, map_location=device, weights_only=True)
+        model.load_state_dict(resume_ckpt["model_state"])
+        if "optimizer_state" in resume_ckpt:
+            optimizer.load_state_dict(resume_ckpt["optimizer_state"])
+        best_bleu4 = float(resume_ckpt.get("best_bleu4", best_bleu4))
+        patience = int(resume_ckpt.get("patience", patience))
+        history = list(resume_ckpt.get("history", history))
+        start_epoch = int(resume_ckpt.get("epoch", 0)) + 1
+        if start_epoch > cfg.train.epochs:
+            tqdm.write(
+                f"Checkpoint epoch ({start_epoch - 1}) already reached/exceeded configured epochs ({cfg.train.epochs}). "
+                "Skipping training and proceeding to final evaluation."
+            )
+
+    for epoch in range(start_epoch, cfg.train.epochs + 1):
         model.train()
         running = []
 
@@ -237,14 +263,35 @@ def train_grace(cfg: GRACEConfig) -> Dict:
                     # Store plain dict to keep checkpoint compatible with torch.load(weights_only=True).
                     "config_dict": asdict(cfg),
                 },
-                out_dir / "best_grace.pt",
+                ckpt_best_path,
             )
         else:
             patience += 1
-            if patience >= cfg.train.early_stop_patience:
-                break
 
-    ckpt = torch.load(out_dir / "best_grace.pt", map_location=device, weights_only=True)
+        torch.save(
+            {
+                "epoch": epoch,
+                "model_state": model.state_dict(),
+                "optimizer_state": optimizer.state_dict(),
+                "best_bleu4": best_bleu4,
+                "patience": patience,
+                "history": history,
+                "tokenizer_vocab": tokenizer.vocab.itos,
+                "graph_node2id": graph.node2id,
+                "config_dict": asdict(cfg),
+            },
+            ckpt_last_path,
+        )
+
+        if patience >= cfg.train.early_stop_patience:
+            tqdm.write("Early stopping triggered.")
+            break
+
+    if ckpt_best_path.exists():
+        ckpt = torch.load(ckpt_best_path, map_location=device, weights_only=True)
+    else:
+        tqdm.write("Best checkpoint not found; falling back to last checkpoint for final evaluation.")
+        ckpt = torch.load(ckpt_last_path, map_location=device, weights_only=True)
     model.load_state_dict(ckpt["model_state"])
     tqdm.write("Best checkpoint loaded. Running final test evaluation...")
 
